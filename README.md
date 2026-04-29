@@ -2,15 +2,27 @@
 
 **A universal MCP server that exposes coding agents — GitHub Copilot, Claude Code, Codex — as background subagents behind a single, unified tool interface.**
 
-agentmux lets one AI agent orchestrate other AI agents. Drop it into your MCP client (Claude Code, Cursor, Continue, …) and you gain seven tools — `agent_spawn`, `agent_send`, `agent_wait`, `agent_status`, `agent_list`, `agent_kill`, `agent_models` — that drive any supported coding agent through its native protocol. Run several in parallel, hand off tasks between them, or use a cheaper model as a worker for a more expensive planner. agentmux speaks each provider's wire protocol natively (ACP JSON-RPC for Copilot, etc.) — no fragile screen-scraping or pexpect.
+agentmux lets one AI agent orchestrate other AI agents. Drop it into your MCP client (Claude Code, Cursor, Continue, …) and you gain seven tools — `agent_spawn`, `agent_send`, `agent_wait`, `agent_status`, `agent_list`, `agent_kill`, `agent_models` — that drive any supported coding agent through its native protocol. Run several in parallel, hand off tasks between them, or use a cheaper model as a worker for a more expensive planner. agentmux speaks each provider's wire protocol natively (ACP JSON-RPC for Copilot, stream-JSON for Claude Code, exec-resume for Codex) — no fragile screen-scraping.
 
 ## Installation
 
-```bash
-# from PyPI (when published)
-pip install agentmux
+**Recommended — no install required ([uvx](https://docs.astral.sh/uv/)):**
 
-# or from source
+```bash
+# uvx runs agentmux directly from PyPI, no pip install needed
+uvx agentmux
+```
+
+**Or install permanently:**
+
+```bash
+pip install agentmux
+# or: uv tool install agentmux
+```
+
+**Or from source:**
+
+```bash
 git clone https://github.com/StefanMaron/agentmux
 cd agentmux
 pip install -e .
@@ -18,11 +30,11 @@ pip install -e .
 
 You also need at least one supported coding-agent CLI installed and authenticated:
 
-| Provider     | CLI                                  | Auth                          |
-|--------------|--------------------------------------|-------------------------------|
-| Copilot      | `copilot` ([install][copilot-cli])   | `copilot` then `/login`       |
-| Claude Code  | `claude` ([install][claude-cli])     | `claude` then `/login`        |
-| Codex        | `codex` ([install][codex-cli])       | `codex login`                 |
+| Provider     | CLI                                  | Auth                    |
+|--------------|--------------------------------------|-------------------------|
+| Copilot      | `copilot` ([install][copilot-cli])   | `copilot login`         |
+| Claude Code  | `claude` ([install][claude-cli])     | `claude` then `/login`  |
+| Codex        | `codex` ([install][codex-cli])       | `codex login`           |
 
 [copilot-cli]: https://docs.github.com/en/copilot/github-copilot-in-the-cli
 [claude-cli]:  https://docs.anthropic.com/en/docs/claude-code
@@ -30,45 +42,66 @@ You also need at least one supported coding-agent CLI installed and authenticate
 
 ## Usage with Claude Code
 
-Register agentmux as an MCP server in Claude Code's `~/.config/claude/settings.json` (or wherever your client looks for MCP servers):
+Add to `~/.claude/mcp.json` (create if it doesn't exist):
 
 ```json
 {
   "mcpServers": {
     "agentmux": {
-      "command": "agentmux",
-      "args": [],
-      "env": {
-        "AGENTMUX_LOG_LEVEL": "INFO"
-      }
+      "command": "uvx",
+      "args": ["agentmux"],
+      "type": "stdio"
     }
   }
 }
 ```
 
+If you installed agentmux permanently, use `"command": "agentmux"` with no `args`.
+
 Restart Claude Code. The seven `agent_*` tools will appear. Try:
 
-> Use `agent_spawn` to start a Copilot session in `/tmp/playground` with the task "write a python script that prints prime numbers up to 100", then `agent_wait` for it to finish.
+> Use `agent_spawn` to start a Copilot session in `/tmp/playground` with the task "write a Python script that prints prime numbers up to 100", then `agent_wait` for it to finish.
+
+## Usage with other MCP clients
+
+Any MCP client that supports stdio servers works. The config shape is the same — point `command` at `agentmux` (or `uvx` + `args: ["agentmux"]`).
 
 ## Tool reference
 
-| Tool            | Args                                                           | Returns                                  |
-|-----------------|----------------------------------------------------------------|------------------------------------------|
-| `agent_models`  | `provider?`                                                    | model ids + multipliers                  |
-| `agent_spawn`   | `task`, `cwd`, `provider`, `model?`, `mode?`                   | `session_id` (non-blocking)              |
-| `agent_send`    | `session_id`, `message`                                        | agent reply (blocks until done)          |
-| `agent_status`  | `session_id`                                                   | `working` \| `idle` \| `done` \| `error` |
-| `agent_wait`    | `session_id`, `timeout_seconds?`                               | accumulated output (blocks)              |
-| `agent_list`    | —                                                              | every active session                     |
-| `agent_kill`    | `session_id`                                                   | terminates the subprocess                |
+| Tool            | Args                                           | Returns                                    |
+|-----------------|------------------------------------------------|--------------------------------------------|
+| `agent_models`  | `provider?`                                    | model ids + cost multipliers per provider  |
+| `agent_spawn`   | `task`, `cwd`, `provider`, `model?`, `mode?`   | `session_id` — non-blocking, starts immediately |
+| `agent_send`    | `session_id`, `message`                        | agent reply (blocks until response)        |
+| `agent_status`  | `session_id`                                   | `working` \| `idle` \| `done` \| `error`  |
+| `agent_wait`    | `session_id`, `timeout_seconds?`               | accumulated output (blocks until done)     |
+| `agent_list`    | —                                              | all active sessions                        |
+| `agent_kill`    | `session_id`                                   | terminates the subprocess                  |
+
+**`provider`** values: `copilot`, `claude`, `codex`
+
+**`mode`** values (Copilot / Claude Code): `agent` (default), `plan`, `autopilot`
 
 ## Provider support
 
-| Provider       | Status | Protocol                       |
-|----------------|--------|--------------------------------|
-| GitHub Copilot | ✓      | ACP JSON-RPC over stdio        |
-| Claude Code    | 🔜     | (planned: ACP / `--print`)     |
-| Codex          | 🔜     | (planned: stdio JSON)          |
+| Provider       | Status | Protocol                              |
+|----------------|--------|---------------------------------------|
+| GitHub Copilot | ✓      | ACP JSON-RPC over stdio               |
+| Claude Code    | ✓      | stream-JSON bidirectional stdio       |
+| Codex          | ✓      | `codex exec` / `codex exec resume`    |
+
+## Model cost multipliers
+
+Use `agent_models(provider="copilot")` at runtime to get the current list. Examples:
+
+| Model (Copilot)       | Multiplier | Notes                  |
+|-----------------------|-----------|------------------------|
+| `auto` / `claude-sonnet-4.6` | 1x | default               |
+| `claude-haiku-4.5`    | 0.33x     | cheapest Claude        |
+| `gpt-5-mini`          | 0x        | free                   |
+| `gpt-4.1`             | 0x        | free                   |
+| `claude-opus-4.7`     | 7.5x      | deep reasoning only    |
+| `gpt-5.5`             | 7.5x      | GPT flagship           |
 
 ## Architecture
 
@@ -86,32 +119,36 @@ Restart Claude Code. The seven `agent_*` tools will appear. Try:
                                          │  └───────────┬────────────┘  │
                                          │              │               │
                                          │  ┌───────────▼────────────┐  │
-                                         │  │   CopilotAdapter       │  │
-                                         │  │   ClaudeCodeAdapter 🔜 │  │
-                                         │  │   CodexAdapter      🔜 │  │
+                                         │  │   CopilotAdapter (ACP) │  │
+                                         │  │   ClaudeCodeAdapter    │  │
+                                         │  │   CodexAdapter         │  │
                                          │  └───────────┬────────────┘  │
                                          └──────────────┼───────────────┘
-                                                        │ stdio JSON-RPC
+                                                        │ native protocol
                                                         ▼
                                           ┌─────────────────────────────┐
-                                          │  copilot --acp (subprocess) │
+                                          │  coding agent subprocess    │
                                           └─────────────────────────────┘
 ```
 
-Each adapter owns one subprocess and one logical session. A reader coroutine demuxes stdout: replies (with `id`) resolve pending futures, while `session/update` notifications stream into an output buffer that `agent_wait` and `agent_send` drain.
+Each adapter owns one subprocess per session. A reader coroutine demuxes stdout: responses resolve pending futures, while streaming updates accumulate in an output buffer that `agent_wait` and `agent_send` drain.
 
 ## Configuration
 
 Environment variables:
 
-| Variable                | Default                           | Purpose                                  |
-|-------------------------|-----------------------------------|------------------------------------------|
-| `AGENTMUX_LOG_LEVEL`    | `INFO`                            | Python logging level (logs go to stderr) |
-| `AGENTMUX_COPILOT_BIN`  | `/home/stefan/.local/bin/copilot` | Path to the `copilot` binary             |
+| Variable               | Default    | Purpose                                   |
+|------------------------|------------|-------------------------------------------|
+| `AGENTMUX_LOG_LEVEL`   | `INFO`     | Python logging level (logs go to stderr)  |
+| `AGENTMUX_COPILOT_BIN` | `copilot`  | Path to the `copilot` binary              |
+| `AGENTMUX_CLAUDE_BIN`  | `claude`   | Path to the `claude` binary               |
+| `AGENTMUX_CODEX_BIN`   | `codex`    | Path to the `codex` binary                |
 
 ## Development
 
 ```bash
+git clone https://github.com/StefanMaron/agentmux
+cd agentmux
 pip install -e ".[dev]"
 ruff check .
 pytest
