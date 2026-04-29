@@ -112,6 +112,40 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "agent_run",
+            "description": (
+                "Run a one-shot task on a coding agent and return the output. "
+                "Spawns the agent, waits for completion, then cleans up — no session management needed. "
+                "Use this when you just want a result without persisting the session. "
+                "Use agent_spawn + agent_wait instead if you need to send corrections or run parallel workers."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "Task for the agent to complete.",
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "description": "Absolute working directory for the agent.",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": sorted(PROVIDERS.keys()),
+                        "description": "Which coding agent to use. Omit for default.",
+                    },
+                    "model": {"type": "string", "description": "Optional model id."},
+                    "timeout_seconds": {
+                        "type": "number",
+                        "description": "Max seconds to wait. Omit to wait indefinitely.",
+                    },
+                },
+                "required": ["task", "cwd"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "agent_send",
             "description": (
                 "Send a follow-up message to a running agent session and block "
@@ -222,6 +256,30 @@ class ToolDispatcher:
                 name: cls.models() for name, cls in PROVIDERS.items()
             }
         }
+
+    async def _tool_agent_run(
+        self,
+        task: str,
+        cwd: str,
+        provider: str | None = None,
+        model: str | None = None,
+        timeout_seconds: float | None = None,
+    ) -> dict:
+        if not provider:
+            provider = DEFAULT_PROVIDER or "copilot"
+        session = await self.registry.spawn(
+            provider=provider, task=task, cwd=cwd, model=model
+        )
+        try:
+            output = await session.adapter.wait(session.session_id, timeout=timeout_seconds)
+            return {"provider": provider, "output": output}
+        except TimeoutError as e:
+            return {"provider": provider, "status": "timeout", "error": str(e)}
+        finally:
+            try:
+                await self.registry.kill(session.session_id)
+            except Exception:
+                pass
 
     async def _tool_agent_spawn(
         self,
