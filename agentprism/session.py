@@ -12,6 +12,7 @@ from agentprism.adapters.base import AgentAdapter
 from agentprism.adapters.claude_code import ClaudeCodeAdapter
 from agentprism.adapters.codex import CodexAdapter
 from agentprism.adapters.copilot import CopilotAdapter
+from agentprism.adapters.gemini import GeminiAdapter
 
 log = logging.getLogger("agentprism.session")
 
@@ -24,6 +25,7 @@ PROVIDERS: dict[str, type[AgentAdapter]] = {
     "copilot": CopilotAdapter,
     "claude": ClaudeCodeAdapter,
     "codex": CodexAdapter,
+    "gemini": GeminiAdapter,
 }
 
 
