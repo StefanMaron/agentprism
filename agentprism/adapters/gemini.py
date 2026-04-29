@@ -149,7 +149,7 @@ class GeminiAdapter(AgentAdapter):
             "-y",                               # yolo: auto-approve all tool calls
             "--skip-trust",                     # trust cwd without interactive prompt
             "--output-format", "stream-json",   # JSONL stream: message/tool/result events
-            "--include-directories", "/tmp",    # allow reading files from /tmp (common for prompt files)
+            "--include-directories", __import__("tempfile").gettempdir(),  # OS temp dir (/tmp on Linux, %TEMP% on Windows)
         ]
         if sess.model:
             argv += ["--model", sess.model]
