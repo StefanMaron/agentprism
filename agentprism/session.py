@@ -27,6 +27,50 @@ PROVIDERS: dict[str, type[AgentAdapter]] = {
 }
 
 
+def _git_head(cwd: str) -> str | None:
+    """Return the current HEAD SHA if cwd is inside a git repo, else None."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=cwd, capture_output=True, text=True, timeout=5,
+        )
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def git_delta(cwd: str, base_sha: str | None) -> dict:
+    """Return new commits and working-tree summary since base_sha."""
+    import subprocess
+
+    result: dict = {}
+    if not base_sha:
+        return result
+
+    try:
+        # New commits since spawn
+        log = subprocess.run(
+            ["git", "log", "--oneline", f"{base_sha}..HEAD"],
+            cwd=cwd, capture_output=True, text=True, timeout=5,
+        )
+        commits = [line.strip() for line in log.stdout.splitlines() if line.strip()]
+        result["new_commits"] = commits
+        result["new_commit_count"] = len(commits)
+
+        # Working tree status (uncommitted changes)
+        status = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=cwd, capture_output=True, text=True, timeout=5,
+        )
+        changed = [line.strip() for line in status.stdout.splitlines() if line.strip()]
+        result["working_tree_changes"] = changed
+    except Exception:
+        pass
+
+    return result
+
+
 @dataclass
 class Session:
     """One live agent session managed by the registry."""
@@ -38,6 +82,7 @@ class Session:
     model: str | None
     mode: str | None
     initial_task: str
+    git_base_sha: str | None = None  # HEAD at spawn time for delta tracking
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def summary(self) -> dict:
@@ -89,6 +134,7 @@ class SessionRegistry:
     ) -> Session:
         cls = self.adapter_class(provider)
         adapter = cls()
+        base_sha = await asyncio.get_event_loop().run_in_executor(None, _git_head, cwd)
         session_id = await adapter.spawn(task=task, cwd=cwd, model=model, mode=mode)
 
         session = Session(
@@ -99,6 +145,7 @@ class SessionRegistry:
             model=model,
             mode=mode,
             initial_task=task,
+            git_base_sha=base_sha,
         )
         async with self._lock:
             self._sessions[session_id] = session

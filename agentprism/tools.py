@@ -22,7 +22,7 @@ import json
 import os
 from typing import Any
 
-from agentprism.session import PROVIDERS, SessionRegistry
+from agentprism.session import PROVIDERS, SessionRegistry, git_delta
 
 DEFAULT_PROVIDER = os.environ.get("AGENTPRISM_DEFAULT_PROVIDER", "")
 
@@ -169,8 +169,10 @@ def tool_definitions() -> list[dict[str, Any]]:
         {
             "name": "agent_status",
             "description": (
-                "Report the current state of an agent session: 'working', "
-                "'idle', 'done', or 'error'."
+                "Report the current state of an agent session: 'working', 'idle', 'done', or 'error'. "
+                "Also returns git context for the session's cwd: new_commits (list of commits made since "
+                "the agent was spawned) and working_tree_changes. Use this instead of running "
+                "git log or git status manually to check what the agent has done."
             ),
             "inputSchema": {
                 "type": "object",
@@ -182,8 +184,9 @@ def tool_definitions() -> list[dict[str, Any]]:
         {
             "name": "agent_wait",
             "description": (
-                "Block until the agent's current turn finishes (or timeout), "
-                "then return its accumulated output."
+                "Block until the agent's current turn finishes (or timeout), then return its output "
+                "plus git context: new_commits made since spawn and working_tree_changes. "
+                "No need to run git log or git status after this — the delta is included."
             ),
             "inputSchema": {
                 "type": "object",
@@ -276,8 +279,12 @@ class ToolDispatcher:
             provider=provider, task=task, cwd=cwd, model=model
         )
         try:
+            import asyncio
             output = await session.adapter.wait(session.session_id, timeout=timeout_seconds)
-            return {"provider": provider, "output": output}
+            delta = await asyncio.get_event_loop().run_in_executor(
+                None, git_delta, session.cwd, session.git_base_sha
+            )
+            return {"provider": provider, "output": output, **delta}
         except TimeoutError as e:
             return {"provider": provider, "status": "timeout", "error": str(e)}
         finally:
@@ -312,17 +319,25 @@ class ToolDispatcher:
         return {"session_id": session_id, "output": output}
 
     async def _tool_agent_status(self, session_id: str) -> dict:
+        import asyncio
         session = self.registry.get(session_id)
         status = await session.adapter.status(session_id)
-        return {"session_id": session_id, "status": status}
+        delta = await asyncio.get_event_loop().run_in_executor(
+            None, git_delta, session.cwd, session.git_base_sha
+        )
+        return {"session_id": session_id, "status": status, **delta}
 
     async def _tool_agent_wait(
         self, session_id: str, timeout_seconds: float | None = None
     ) -> dict:
+        import asyncio
         session = self.registry.get(session_id)
         try:
             output = await session.adapter.wait(session_id, timeout=timeout_seconds)
-            return {"session_id": session_id, "status": "done", "output": output}
+            delta = await asyncio.get_event_loop().run_in_executor(
+                None, git_delta, session.cwd, session.git_base_sha
+            )
+            return {"session_id": session_id, "status": "done", "output": output, **delta}
         except TimeoutError as e:
             return {"session_id": session_id, "status": "timeout", "error": str(e)}
 
