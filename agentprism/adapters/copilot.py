@@ -97,6 +97,13 @@ class CopilotAdapter(AgentAdapter):
         self._last_stop_reason: str | None = None
         self._error: str | None = None
 
+        # Observability — tracked independently of ACP notification content.
+        import time
+        self._spawn_time: float = time.time()
+        self._last_frame_at: float = time.time()
+        self._frame_count: int = 0
+        self._log_file: str | None = None  # populated after spawn
+
     # ------------------------------------------------------------------ public
 
     @classmethod
@@ -146,6 +153,16 @@ class CopilotAdapter(AgentAdapter):
         self._reader_task = asyncio.create_task(self._read_stdout(), name="copilot-stdout")
         self._stderr_task = asyncio.create_task(self._read_stderr(), name="copilot-stderr")
 
+        # Find the copilot log file created for this process (used for activity tracking).
+        import glob
+        import pathlib as _pathlib
+        import time as _time
+        _time.sleep(0.3)  # let copilot create its log file
+        logs = sorted(glob.glob(str(_pathlib.Path.home() / ".copilot" / "logs" / "*.log")),
+                      key=lambda p: os.path.getmtime(p), reverse=True)
+        if logs:
+            self._log_file = logs[0]
+
         # 1. initialize
         await self._request(
             "initialize",
@@ -163,7 +180,18 @@ class CopilotAdapter(AgentAdapter):
             raise RuntimeError(f"copilot session/new returned no sessionId: {new_resp!r}")
         self._acp_session_id = session_id
 
-        # 3. optional set_mode
+        # 3a. set model via ACP config (CLI --model flag is overridden by settings.json)
+        if model:
+            try:
+                await self._request(
+                    "session/set_config",
+                    {"sessionId": session_id, "configId": "model", "value": model},
+                )
+                log.info("Set copilot model to %r via session/set_config", model)
+            except Exception:
+                log.warning("session/set_config failed — model may not be honoured; CLI flag was: %r", model)
+
+        # 3b. optional set_mode
         if mode:
             await self._request(
                 "session/set_mode",
@@ -192,6 +220,35 @@ class CopilotAdapter(AgentAdapter):
         if not self._done.is_set():
             return "working"
         return "idle"
+
+    def activity_info(self) -> dict:
+        """Return observability metadata independent of ACP notification content."""
+        import time
+        now = time.time()
+        info: dict = {
+            "acp_frames_received": self._frame_count,
+            "last_acp_frame_seconds_ago": round(now - self._last_frame_at, 1),
+            "uptime_seconds": round(now - self._spawn_time),
+            "process_alive": self._proc is not None and self._proc.returncode is None,
+        }
+        # Read recent activity from copilot's log file
+        recent_tools: list[str] = []
+        if self._log_file:
+            try:
+                with open(self._log_file, encoding="utf-8", errors="replace") as f:
+                    lines = f.readlines()
+                for line in lines[-200:]:
+                    if "[INFO] System notification:" in line or \
+                       "Tool invoked" in line or \
+                       "tool invoked" in line or \
+                       "Persisted checkpoint" in line:
+                        # Extract just the relevant part
+                        msg = line.strip().split("] ", 1)[-1] if "] " in line else line.strip()
+                        recent_tools.append(msg[:120])
+                info["recent_log_activity"] = recent_tools[-5:]  # last 5 entries
+            except Exception:
+                pass
+        return info
 
     async def wait(self, session_id: str, timeout: float | None = None) -> str:
         self._check_session(session_id)
@@ -326,6 +383,9 @@ class CopilotAdapter(AgentAdapter):
                 except json.JSONDecodeError:
                     log.warning("copilot non-JSON stdout line: %r", line[:200])
                     continue
+                import time
+                self._last_frame_at = time.time()
+                self._frame_count += 1
                 self._dispatch(frame)
         except asyncio.CancelledError:
             raise
@@ -416,6 +476,16 @@ class CopilotAdapter(AgentAdapter):
             result = content.get("text") or content.get("output") or ""
             if result:
                 self._all_chunks.append({"kind": "tool", "text": f"  → {str(result)[:300]}\n"})
+
+        elif kind is not None:
+            # Unknown kind — log the raw update so we can learn what Copilot sends
+            # and surface something to the dashboard rather than silently dropping
+            log.debug("copilot unknown sessionUpdate kind=%r update=%r", kind, update)
+            # Show anything with visible text
+            text = (content.get("text") or content.get("output") or
+                    update.get("text") or str(update)[:200])
+            if text and kind not in ("available_commands_update", "user_message_chunk"):
+                self._all_chunks.append({"kind": "tool", "text": f"[{kind}] {str(text)[:300]}\n"})
 
     def _drain_output(self) -> str:
         text = "".join(self._output_buffer)

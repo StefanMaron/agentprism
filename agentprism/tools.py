@@ -169,10 +169,15 @@ def tool_definitions() -> list[dict[str, Any]]:
         {
             "name": "agent_status",
             "description": (
-                "Report the current state of an agent session: 'working', 'idle', 'done', or 'error'. "
-                "Also returns git context for the session's cwd: new_commits (list of commits made since "
-                "the agent was spawned) and working_tree_changes. Use this instead of running "
-                "git log or git status manually to check what the agent has done."
+                "Report the current state of an agent session. Returns: "
+                "status (working/idle/done/error), "
+                "new_commits and working_tree_changes (git activity since spawn), "
+                "activity.acp_frames_received (total protocol frames — rises steadily if agent is active), "
+                "activity.last_acp_frame_seconds_ago (seconds since last heartbeat — high value means stuck), "
+                "activity.process_alive (is the subprocess still running), "
+                "activity.recent_log_activity (last tool calls / shell commands from agent log). "
+                "DO NOT kill a session just because output text is empty — check working_tree_changes and "
+                "activity.acp_frames_received to confirm whether real work is happening."
             ),
             "inputSchema": {
                 "type": "object",
@@ -325,7 +330,11 @@ class ToolDispatcher:
         delta = await asyncio.get_event_loop().run_in_executor(
             None, git_delta, session.cwd, session.git_base_sha
         )
-        return {"session_id": session_id, "status": status, **delta}
+        result: dict = {"session_id": session_id, "status": status, **delta}
+        # Add provider-specific activity info if available (e.g. log tailing, frame counts)
+        if hasattr(session.adapter, "activity_info"):
+            result["activity"] = session.adapter.activity_info()
+        return result
 
     async def _tool_agent_wait(
         self, session_id: str, timeout_seconds: float | None = None
