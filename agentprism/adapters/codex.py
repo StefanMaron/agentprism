@@ -1,11 +1,11 @@
-"""Codex CLI adapter for agentmux.
+"""Codex CLI adapter for agentprism.
 
 Wraps the OpenAI ``codex`` CLI behind the :class:`AgentAdapter` interface.
 
 Programmatic interface notes
 ----------------------------
 The Codex CLI (`codex`, installed at ``$(which codex)``) exposes several
-non-interactive entry points. For agentmux we use ``codex exec``, which is
+non-interactive entry points. For agentprism we use ``codex exec``, which is
 the documented headless mode:
 
     codex exec [OPTIONS] [PROMPT]
@@ -51,7 +51,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from agentmux.adapters.base import AgentAdapter
+from agentprism.adapters.base import AgentAdapter
 
 
 class NotInstalledError(RuntimeError):
@@ -216,7 +216,7 @@ class CodexAdapter(AgentAdapter):
 
         ``multiplier`` is a relative cost weight (1.0 = baseline ~ ``o4-mini``-class
         token pricing). These are approximate and intended only for relative
-        comparison/budget heuristics inside agentmux.
+        comparison/budget heuristics inside agentprism.
         """
         return [
             {

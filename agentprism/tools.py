@@ -1,4 +1,4 @@
-"""MCP tool definitions and dispatch for agentmux.
+"""MCP tool definitions and dispatch for agentprism.
 
 Each tool is described by a JSON schema (consumed by the MCP SDK to
 advertise capabilities) and a coroutine handler that operates on the
@@ -20,14 +20,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from agentmux.session import PROVIDERS, SessionRegistry
+from agentprism.session import PROVIDERS, SessionRegistry
 
 
 # ---------------------------------------------------------------------- schemas
 
 
 def tool_definitions() -> list[dict[str, Any]]:
-    """Return the JSON-schema definitions for every agentmux tool."""
+    """Return the JSON-schema definitions for every agentprism tool."""
     return [
         {
             "name": "agent_models",

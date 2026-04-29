@@ -1,30 +1,30 @@
-# agentmux
+# agentprism
 
 **A universal MCP server that exposes coding agents — GitHub Copilot, Claude Code, Codex — as background subagents behind a single, unified tool interface.**
 
-agentmux lets one AI agent orchestrate other AI agents. Drop it into your MCP client (Claude Code, Cursor, Continue, …) and you gain seven tools — `agent_spawn`, `agent_send`, `agent_wait`, `agent_status`, `agent_list`, `agent_kill`, `agent_models` — that drive any supported coding agent through its native protocol. Run several in parallel, hand off tasks between them, or use a cheaper model as a worker for a more expensive planner. agentmux speaks each provider's wire protocol natively (ACP JSON-RPC for Copilot, stream-JSON for Claude Code, exec-resume for Codex) — no fragile screen-scraping.
+agentprism lets one AI agent orchestrate other AI agents. Drop it into your MCP client (Claude Code, Cursor, Continue, …) and you gain seven tools — `agent_spawn`, `agent_send`, `agent_wait`, `agent_status`, `agent_list`, `agent_kill`, `agent_models` — that drive any supported coding agent through its native protocol. Run several in parallel, hand off tasks between them, or use a cheaper model as a worker for a more expensive planner. agentprism speaks each provider's wire protocol natively (ACP JSON-RPC for Copilot, stream-JSON for Claude Code, exec-resume for Codex) — no fragile screen-scraping.
 
 ## Installation
 
 **Recommended — no install required ([uvx](https://docs.astral.sh/uv/)):**
 
 ```bash
-# uvx runs agentmux directly from PyPI, no pip install needed
-uvx agentmux
+# uvx runs agentprism directly from PyPI, no pip install needed
+uvx agentprism
 ```
 
 **Or install permanently:**
 
 ```bash
-pip install agentmux
-# or: uv tool install agentmux
+pip install agentprism
+# or: uv tool install agentprism
 ```
 
 **Or from source:**
 
 ```bash
-git clone https://github.com/StefanMaron/agentmux
-cd agentmux
+git clone https://github.com/StefanMaron/agentprism
+cd agentprism
 pip install -e .
 ```
 
@@ -47,16 +47,16 @@ Add to `~/.claude/mcp.json` (create if it doesn't exist):
 ```json
 {
   "mcpServers": {
-    "agentmux": {
+    "agentprism": {
       "command": "uvx",
-      "args": ["agentmux"],
+      "args": ["agentprism"],
       "type": "stdio"
     }
   }
 }
 ```
 
-If you installed agentmux permanently, use `"command": "agentmux"` with no `args`.
+If you installed agentprism permanently, use `"command": "agentprism"` with no `args`.
 
 Restart Claude Code. The seven `agent_*` tools will appear. Try:
 
@@ -64,7 +64,7 @@ Restart Claude Code. The seven `agent_*` tools will appear. Try:
 
 ## Usage with other MCP clients
 
-Any MCP client that supports stdio servers works. The config shape is the same — point `command` at `agentmux` (or `uvx` + `args: ["agentmux"]`).
+Any MCP client that supports stdio servers works. The config shape is the same — point `command` at `agentprism` (or `uvx` + `args: ["agentprism"]`).
 
 ## Tool reference
 
@@ -107,7 +107,7 @@ Use `agent_models(provider="copilot")` at runtime to get the current list. Examp
 
 ```
 ┌──────────────────┐                     ┌──────────────────────────────┐
-│  MCP client      │  agent_spawn(...)   │      agentmux server         │
+│  MCP client      │  agent_spawn(...)   │      agentprism server         │
 │  (Claude Code,   │ ──────────────────► │                              │
 │   Cursor, ...)   │  ◄──── result ────  │  ┌────────────────────────┐  │
 └──────────────────┘                     │  │   ToolDispatcher       │  │
@@ -139,16 +139,16 @@ Environment variables:
 
 | Variable               | Default    | Purpose                                   |
 |------------------------|------------|-------------------------------------------|
-| `AGENTMUX_LOG_LEVEL`   | `INFO`     | Python logging level (logs go to stderr)  |
-| `AGENTMUX_COPILOT_BIN` | `copilot`  | Path to the `copilot` binary              |
-| `AGENTMUX_CLAUDE_BIN`  | `claude`   | Path to the `claude` binary               |
-| `AGENTMUX_CODEX_BIN`   | `codex`    | Path to the `codex` binary                |
+| `AGENTPRISM_LOG_LEVEL`   | `INFO`     | Python logging level (logs go to stderr)  |
+| `AGENTPRISM_COPILOT_BIN` | `copilot`  | Path to the `copilot` binary              |
+| `AGENTPRISM_CLAUDE_BIN`  | `claude`   | Path to the `claude` binary               |
+| `AGENTPRISM_CODEX_BIN`   | `codex`    | Path to the `codex` binary                |
 
 ## Development
 
 ```bash
-git clone https://github.com/StefanMaron/agentmux
-cd agentmux
+git clone https://github.com/StefanMaron/agentprism
+cd agentprism
 pip install -e ".[dev]"
 ruff check .
 pytest

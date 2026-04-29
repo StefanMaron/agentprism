@@ -43,5 +43,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         # Uses OIDC trusted publishing — no PYPI_API_TOKEN secret needed.
         # Set up at: https://pypi.org/manage/account/publishing/
-        # Project: agentmux, Owner: StefanMaron, Repo: agentmux,
+        # Project: agentprism, Owner: StefanMaron, Repo: agentprism,
         # Workflow: publish.yml, Environment: pypi

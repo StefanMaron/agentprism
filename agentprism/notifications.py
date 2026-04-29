@@ -1,7 +1,7 @@
 """Server → client push notifications when subagent sessions complete.
 
 When a session spawned via ``agent_spawn`` finishes (the wrapped adapter
-flips to a terminal ``done``/``error`` state), agentmux proactively pokes
+flips to a terminal ``done``/``error`` state), agentprism proactively pokes
 the orchestrating MCP client so the LLM can wake up and process the
 result without polling.
 
@@ -37,9 +37,9 @@ from mcp import types
 if TYPE_CHECKING:  # pragma: no cover
     from mcp.server.session import ServerSession
 
-    from agentmux.session import Session
+    from agentprism.session import Session
 
-log = logging.getLogger("agentmux.notifications")
+log = logging.getLogger("agentprism.notifications")
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +163,7 @@ async def notify_session_complete(
         await server_session.send_log_message(
             level="info",
             data=payload,
-            logger="agentmux.session_complete",
+            logger="agentprism.session_complete",
         )
         log.info(
             "notifications/message delivered for session %s", session.session_id

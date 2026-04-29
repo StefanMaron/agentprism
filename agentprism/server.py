@@ -1,8 +1,8 @@
-"""agentmux MCP server entrypoint.
+"""agentprism MCP server entrypoint.
 
 Wires the :class:`SessionRegistry` and :class:`ToolDispatcher` to the
-``mcp`` SDK's stdio server. Run via the ``agentmux`` console script
-(see ``pyproject.toml``) or ``python -m agentmux.server``.
+``mcp`` SDK's stdio server. Run via the ``agentprism`` console script
+(see ``pyproject.toml``) or ``python -m agentprism.server``.
 """
 
 from __future__ import annotations
@@ -16,15 +16,15 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
-from agentmux.notifications import MCPContextHolder, notify_session_complete
-from agentmux.session import Session, SessionRegistry
-from agentmux.tools import ToolDispatcher, tool_definitions
+from agentprism.notifications import MCPContextHolder, notify_session_complete
+from agentprism.session import Session, SessionRegistry
+from agentprism.tools import ToolDispatcher, tool_definitions
 
-log = logging.getLogger("agentmux")
+log = logging.getLogger("agentprism")
 
 
 def _configure_logging() -> None:
-    level_name = os.environ.get("AGENTMUX_LOG_LEVEL", "INFO").upper()
+    level_name = os.environ.get("AGENTPRISM_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
     # IMPORTANT: log to stderr so we never corrupt the stdio MCP channel.
     logging.basicConfig(
@@ -44,7 +44,7 @@ def build_server() -> tuple[Server, SessionRegistry, MCPContextHolder]:
     earliest moment the SDK exposes the session via its ``ContextVar``).
     """
     holder = MCPContextHolder()
-    server: Server = Server("agentmux")
+    server: Server = Server("agentprism")
 
     async def _on_session_complete(session: Session, output: str) -> None:
         # Best-effort wake-up nudge to the orchestrating client.
@@ -90,7 +90,7 @@ def build_server() -> tuple[Server, SessionRegistry, MCPContextHolder]:
 async def run() -> None:
     _configure_logging()
     server, registry, holder = build_server()
-    log.info("agentmux starting (pid=%d)", os.getpid())
+    log.info("agentprism starting (pid=%d)", os.getpid())
     try:
         async with stdio_server() as (read_stream, write_stream):
             await server.run(
@@ -99,7 +99,7 @@ async def run() -> None:
                 server.create_initialization_options(),
             )
     finally:
-        log.info("agentmux shutting down — killing %d sessions", len(registry.list()))
+        log.info("agentprism shutting down — killing %d sessions", len(registry.list()))
         await registry.shutdown()
         holder.clear()
 

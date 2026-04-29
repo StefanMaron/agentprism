@@ -1,0 +1,11 @@
+"""Provider-specific adapters for agentprism.
+
+Each adapter implements the :class:`AgentAdapter` interface defined in
+:mod:`agentprism.adapters.base`, wrapping a coding agent's native protocol
+(stdio JSON-RPC, HTTP, etc.) behind a uniform async API.
+"""
+
+from agentprism.adapters.base import AgentAdapter
+from agentprism.adapters.copilot import CopilotAdapter
+
+__all__ = ["AgentAdapter", "CopilotAdapter"]

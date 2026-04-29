@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agentmux"
+name = "agentprism"
 version = "0.1.0"
 description = "Universal MCP server that exposes coding agents (Copilot, Claude Code, Codex) as subagents via a unified tool interface"
 readme = "README.md"
@@ -37,15 +37,15 @@ dev = [
 ]
 
 [project.scripts]
-agentmux = "agentmux.server:main"
+agentprism = "agentprism.server:main"
 
 [project.urls]
-Homepage = "https://github.com/StefanMaron/agentmux"
-Repository = "https://github.com/StefanMaron/agentmux"
-Issues = "https://github.com/StefanMaron/agentmux/issues"
+Homepage = "https://github.com/StefanMaron/agentprism"
+Repository = "https://github.com/StefanMaron/agentprism"
+Issues = "https://github.com/StefanMaron/agentprism/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["agentmux"]
+packages = ["agentprism"]
 
 [tool.ruff]
 line-length = 100

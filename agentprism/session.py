@@ -8,12 +8,12 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from agentmux.adapters.base import AgentAdapter
-from agentmux.adapters.claude_code import ClaudeCodeAdapter
-from agentmux.adapters.codex import CodexAdapter
-from agentmux.adapters.copilot import CopilotAdapter
+from agentprism.adapters.base import AgentAdapter
+from agentprism.adapters.claude_code import ClaudeCodeAdapter
+from agentprism.adapters.codex import CodexAdapter
+from agentprism.adapters.copilot import CopilotAdapter
 
-log = logging.getLogger("agentmux.session")
+log = logging.getLogger("agentprism.session")
 
 #: Callback signature fired when an adapter session reaches a terminal state.
 #: Receives the :class:`Session` and the adapter's accumulated output.
@@ -56,7 +56,7 @@ class SessionRegistry:
 
     The registry is the single source of truth for spawned agents during the
     MCP server's lifetime. It's intentionally process-local — restarting
-    agentmux drops all sessions.
+    agentprism drops all sessions.
     """
 
     def __init__(

@@ -31,11 +31,11 @@ import logging
 import os
 from typing import Any
 
-from agentmux.adapters.base import AgentAdapter
+from agentprism.adapters.base import AgentAdapter
 
 log = logging.getLogger(__name__)
 
-COPILOT_BINARY = os.environ.get("AGENTMUX_COPILOT_BIN", "copilot")
+COPILOT_BINARY = os.environ.get("AGENTPRISM_COPILOT_BIN", "copilot")
 
 # Live-probed model catalogue. Multipliers are quoted strings to preserve
 # the human-readable "0x" / "7.5x" form Copilot uses.
@@ -137,7 +137,7 @@ class CopilotAdapter(AgentAdapter):
             {
                 "protocolVersion": 1,
                 "capabilities": {},
-                "clientInfo": {"name": "agentmux", "version": "0.1.0"},
+                "clientInfo": {"name": "agentprism", "version": "0.1.0"},
             },
         )
 

@@ -1,4 +1,4 @@
-"""Claude Code adapter — wraps the ``claude`` CLI as an agentmux subagent.
+"""Claude Code adapter — wraps the ``claude`` CLI as an agentprism subagent.
 
 Programmatic interface used
 ---------------------------
@@ -76,7 +76,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from agentmux.adapters.base import AgentAdapter
+from agentprism.adapters.base import AgentAdapter
 
 
 # ---------------------------------------------------------------------------

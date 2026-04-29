@@ -1,4 +1,4 @@
-"""Abstract base class for agentmux provider adapters."""
+"""Abstract base class for agentprism provider adapters."""
 
 from __future__ import annotations
 
