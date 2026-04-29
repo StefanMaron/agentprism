@@ -7,5 +7,6 @@ Each adapter implements the :class:`AgentAdapter` interface defined in
 
 from agentprism.adapters.base import AgentAdapter
 from agentprism.adapters.copilot import CopilotAdapter
+from agentprism.adapters.ollama import OllamaAdapter
 
-__all__ = ["AgentAdapter", "CopilotAdapter"]
+__all__ = ["AgentAdapter", "CopilotAdapter", "OllamaAdapter"]
