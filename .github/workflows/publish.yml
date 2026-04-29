@@ -17,6 +17,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+          echo "Building version $VERSION"
+
       - name: Build
         run: |
           pip install build
