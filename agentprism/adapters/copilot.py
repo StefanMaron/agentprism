@@ -10,7 +10,6 @@ import asyncio
 import logging
 import os
 import pathlib
-import tempfile
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -45,7 +44,7 @@ class _CopilotSession:
     session_name: str        # passed to --name / --resume
     cwd: str
     model: str | None
-    output_file: str         # --share target
+    output_file: str = ""    # unused, kept for compat
     proc: asyncio.subprocess.Process | None = None
     output: str = ""
     status: str = "working"  # working | idle | done | error
@@ -89,14 +88,11 @@ class CopilotAdapter(AgentAdapter):
     ) -> str:
         session_id = str(uuid.uuid4())
         session_name = f"agentprism-{session_id[:8]}"
-        output_file = tempfile.mktemp(prefix="agentprism-", suffix=".md")
-
         sess = _CopilotSession(
             session_id=session_id,
             session_name=session_name,
             cwd=cwd,
             model=model,
-            output_file=output_file,
         )
         self._session = sess
 
@@ -176,8 +172,7 @@ class CopilotAdapter(AgentAdapter):
         argv += [
             "-p", prompt,
             "--yolo",
-            "--share", sess.output_file,
-            "-s",  # silent: agent response only, no stats
+            "--output-format", "json",  # JSONL stream with tool calls, results, messages
         ]
         if sess.model:
             argv += ["--model", sess.model]
@@ -202,33 +197,73 @@ class CopilotAdapter(AgentAdapter):
         )
 
     async def _drain(self, sess: _CopilotSession) -> None:
-        """Read stdout/stderr, update chunks, mark done on exit."""
+        """Read JSONL stdout, parse events into chunks, collect final output."""
+        import json as _json
         assert sess.proc is not None
-        stdout_chunks: list[bytes] = []
+        text_parts: list[str] = []
         stderr_chunks: list[bytes] = []
 
-        async def read_stream(stream: asyncio.StreamReader, buf: list[bytes], kind: str) -> None:
+        async def read_stderr() -> None:
+            assert sess.proc is not None
             while True:
-                line = await stream.readline()
+                line = await sess.proc.stderr.readline()
                 if not line:
                     break
-                buf.append(line)
-                sess.last_activity = time.time()
-                text = line.decode("utf-8", errors="replace")
-                sess.all_chunks.append({"kind": kind, "text": text})
+                stderr_chunks.append(line)
 
-        await asyncio.gather(
-            read_stream(sess.proc.stdout, stdout_chunks, "text"),
-            read_stream(sess.proc.stderr, stderr_chunks, "tool"),
-        )
+        async def read_stdout_jsonl() -> None:
+            assert sess.proc is not None
+            while True:
+                line = await sess.proc.stdout.readline()
+                if not line:
+                    break
+                sess.last_activity = time.time()
+                raw = line.decode("utf-8", errors="replace").strip()
+                if not raw:
+                    continue
+                try:
+                    ev = _json.loads(raw)
+                except _json.JSONDecodeError:
+                    sess.all_chunks.append({"kind": "text", "text": raw + "\n"})
+                    continue
+
+                ev_type = ev.get("type", "")
+                data = ev.get("data") or {}
+
+                if ev_type == "tool.execution_start":
+                    name = data.get("toolName", "tool")
+                    args = data.get("arguments") or {}
+                    cmd = args.get("command") or args.get("query") or _json.dumps(args)[:80]
+                    sess.all_chunks.append({"kind": "tool", "text": f"⚙ {name}({cmd})\n"})
+
+                elif ev_type == "tool.execution_complete":
+                    result = data.get("result") or {}
+                    out = result.get("content") or result.get("output") or ""
+                    if out:
+                        preview = str(out)[:300].replace("\n", " ")
+                        sess.all_chunks.append({"kind": "tool", "text": f"  → {preview}\n"})
+
+                elif ev_type == "assistant.message":
+                    content = data.get("content") or ""
+                    if content:
+                        text_parts.append(content)
+                        sess.all_chunks.append({"kind": "text", "text": content})
+                    # Surface tool requests as upcoming tool calls
+                    for tr in data.get("toolRequests") or []:
+                        name = tr.get("name", "tool")
+                        args = tr.get("arguments") or {}
+                        cmd = args.get("command") or args.get("query") or _json.dumps(args)[:80]
+                        sess.all_chunks.append({"kind": "think", "text": f"→ calling {name}({cmd})\n"})
+
+                elif ev_type == "assistant.thinking":
+                    think = data.get("thinking") or data.get("content") or ""
+                    if think:
+                        sess.all_chunks.append({"kind": "think", "text": think[:200] + "\n"})
+
+        await asyncio.gather(read_stdout_jsonl(), read_stderr())
         await sess.proc.wait()
 
-        # Prefer the --share file (full markdown output) over stdout
-        share = pathlib.Path(sess.output_file)
-        if share.exists() and share.stat().st_size > 0:
-            sess.output = share.read_text(encoding="utf-8", errors="replace")
-        else:
-            sess.output = b"".join(stdout_chunks).decode("utf-8", errors="replace")
+        sess.output = "\n".join(text_parts) if text_parts else ""
 
         if sess.proc.returncode != 0 and not sess.output.strip():
             err = b"".join(stderr_chunks).decode("utf-8", errors="replace")
