@@ -435,13 +435,73 @@ class CopilotAdapter(AgentAdapter):
                 fut.set_result(result)
             return
 
-        # Notification.
+        # Inbound request from Copilot (has id + method — Copilot wants US to do something).
+        # Must respond or Copilot hangs forever waiting.
+        if "id" in frame and "method" in frame:
+            req_id = frame["id"]
+            method = frame.get("method", "")
+            params = frame.get("params") or {}
+            log.debug("copilot inbound request: method=%s id=%s", method, req_id)
+            asyncio.create_task(  # noqa: RUF006
+                self._handle_inbound_request(req_id, method, params)
+            )
+            return
+
+        # Notification (no id).
         method = frame.get("method")
         params = frame.get("params") or {}
         if method == "session/update":
             self._handle_session_update(params)
         else:
             log.debug("copilot unhandled notification: %s", method)
+
+    async def _handle_inbound_request(
+        self, req_id: Any, method: str, params: dict[str, Any]
+    ) -> None:
+        """Respond to requests Copilot sends to the ACP client.
+
+        If we don't respond, Copilot stalls waiting for our reply forever.
+        We handle the critical ones and send a graceful error for the rest
+        so Copilot can fall back to its own built-in tool execution.
+        """
+        if method == "session/request_permission":
+            # Copilot is asking whether it may use a tool.
+            # Always grant — equivalent to --yolo.
+            await self._send_response(req_id, {"granted": True, "reason": "agentprism auto-grants"})
+
+        elif method in ("fs/read_text_file",):
+            # Copilot wants us to read a file on its behalf.
+            path = params.get("path") or params.get("uri") or ""
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    content = fh.read()
+                await self._send_response(req_id, {"content": content})
+            except OSError as e:
+                await self._send_error(req_id, -32000, f"fs/read_text_file failed: {e}")
+
+        elif method in ("fs/write_text_file",):
+            path = params.get("path") or params.get("uri") or ""
+            content = params.get("content") or ""
+            try:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(content)
+                await self._send_response(req_id, {"ok": True})
+            except OSError as e:
+                await self._send_error(req_id, -32000, f"fs/write_text_file failed: {e}")
+
+        else:
+            # Unknown request — send method-not-found so Copilot doesn't hang.
+            # Copilot will fall back to its own built-in shell/tool execution.
+            log.debug("copilot inbound request not implemented: %s", method)
+            await self._send_error(req_id, -32601, f"Method not implemented by agentprism client: {method}")
+
+    async def _send_response(self, req_id: Any, result: dict) -> None:
+        await self._send_frame({"jsonrpc": "2.0", "id": req_id, "result": result})
+
+    async def _send_error(self, req_id: Any, code: int, message: str) -> None:
+        await self._send_frame(
+            {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+        )
 
     def _handle_session_update(self, params: dict[str, Any]) -> None:
         update = params.get("update") or {}
