@@ -172,12 +172,12 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "Report the current state of an agent session. Returns: "
                 "status (working/idle/done/error), "
                 "new_commits and working_tree_changes (git activity since spawn), "
-                "activity.acp_frames_received (total protocol frames — rises steadily if agent is active), "
-                "activity.last_acp_frame_seconds_ago (seconds since last heartbeat — high value means stuck), "
                 "activity.process_alive (is the subprocess still running), "
-                "activity.recent_log_activity (last tool calls / shell commands from agent log). "
-                "DO NOT kill a session just because output text is empty — check working_tree_changes and "
-                "activity.acp_frames_received to confirm whether real work is happening."
+                "activity.last_activity_seconds_ago (seconds since last output line — rises if stuck), "
+                "activity.uptime_seconds (total time running). "
+                "DO NOT kill a session just because output text is empty or last_activity is high — "
+                "the agent may be waiting for an LLM API response (normal). "
+                "Only kill if process_alive is false, or working_tree_changes is empty after many minutes with no commits."
             ),
             "inputSchema": {
                 "type": "object",
