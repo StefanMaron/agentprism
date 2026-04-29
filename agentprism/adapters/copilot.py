@@ -462,7 +462,6 @@ class CopilotAdapter(AgentAdapter):
                     self._all_chunks.append({"kind": "think", "text": text})
 
         elif kind in ("tool_call_chunk", "tool_call"):
-            # Surface tool name + args so the user can see what's running
             name = content.get("name") or update.get("name") or ""
             args = content.get("arguments") or content.get("input") or ""
             if isinstance(args, dict):
@@ -471,6 +470,23 @@ class CopilotAdapter(AgentAdapter):
             label = f"⚙ {name}({str(args)[:120]})\n" if name else ""
             if label:
                 self._all_chunks.append({"kind": "tool", "text": label})
+
+        elif kind == "tool_call_update":
+            # Copilot's actual tool call notification kind
+            status = update.get("status", "")
+            tool_id = update.get("toolCallId", "")
+            tool_name = update.get("toolName") or update.get("name") or tool_id[:12] or "tool"
+            raw_out = update.get("rawOutput") or {}
+            out_text = ""
+            if isinstance(raw_out, dict):
+                out_text = raw_out.get("content") or raw_out.get("text") or raw_out.get("output") or ""
+            elif isinstance(raw_out, str):
+                out_text = raw_out
+            if status == "started":
+                self._all_chunks.append({"kind": "tool", "text": f"⚙ {tool_name} …\n"})
+            elif out_text:
+                preview = str(out_text)[:200].replace("\n", " ")
+                self._all_chunks.append({"kind": "tool", "text": f"  → {preview}\n"})
 
         elif kind == "tool_result_chunk":
             result = content.get("text") or content.get("output") or ""
