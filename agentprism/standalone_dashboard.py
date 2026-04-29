@@ -235,6 +235,17 @@ document.getElementById('terminal-overlay').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTerminal(); });
 
+// Event delegation — avoids inline onclick escaping issues with task text
+document.addEventListener('click', e => {
+  const watchBtn = e.target.closest('.watch-btn');
+  if (watchBtn) {
+    openTerminal(watchBtn.dataset.sid, watchBtn.dataset.provider, watchBtn.dataset.task || '');
+    return;
+  }
+  const killBtn = e.target.closest('.kill-btn');
+  if (killBtn) kill(killBtn.dataset.sid);
+});
+
 async function refresh() {
   let payload;
   try {
@@ -268,18 +279,20 @@ async function refresh() {
       for (const s of g.sessions) {
         const short = s.session_id.slice(0,8);
         const isActive = activeId === s.session_id;
-        const taskEsc = (s.initial_task || '').replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'");
+        const taskTitle = esc(s.initial_task || '');
+        const taskShort = esc((s.initial_task||'').slice(0,80));
         html += `<tr>
           <td title="${s.session_id}">${short}…</td>
           <td class="provider-${s.provider}">${s.provider}</td>
           <td>${s.model || 'auto'}</td>
           <td class="status-${s.status}"><span class="dot dot-${s.status}"></span>${s.status}</td>
           <td>${elapsed(s.created_at)}</td>
-          <td class="task-cell" title="${esc(s.initial_task || '')}">${esc((s.initial_task||'').slice(0,80))}${(s.initial_task||'').length>80?'…':''}</td>
+          <td class="task-cell" title="${taskTitle}">${taskShort}${(s.initial_task||'').length>80?'…':''}</td>
           <td style="white-space:nowrap">
-            <button class="watch-btn${isActive?' active':''}" onclick="openTerminal('${s.session_id}','${s.provider}','${taskEsc}')">watch</button>
+            <button class="watch-btn${isActive?' active':''}"
+              data-sid="${s.session_id}" data-provider="${s.provider}" data-task="${taskTitle}">watch</button>
             &nbsp;
-            <button class="kill-btn" onclick="kill('${s.session_id}')">kill</button>
+            <button class="kill-btn" data-sid="${s.session_id}">kill</button>
           </td>
         </tr>`;
       }

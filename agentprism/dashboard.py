@@ -241,6 +241,17 @@ document.getElementById('terminal-overlay').addEventListener('click', e => {
 // Close on Escape
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTerminal(); });
 
+// Event delegation for watch/kill buttons
+document.addEventListener('click', e => {
+  const watchBtn = e.target.closest('.watch-btn');
+  if (watchBtn) {
+    openTerminal(watchBtn.dataset.sid, watchBtn.dataset.provider, watchBtn.dataset.task || '');
+    return;
+  }
+  const killBtn = e.target.closest('.kill-btn');
+  if (killBtn) kill(killBtn.dataset.sid);
+});
+
 async function refresh() {
   const res = await fetch('/api/sessions');
   const { sessions } = await res.json();
@@ -256,7 +267,7 @@ async function refresh() {
   for (const s of sessions) {
     const short = s.session_id.slice(0,8);
     const isActive = activeId === s.session_id;
-    const taskEsc = s.initial_task.replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'");
+    const taskTitle = esc(s.initial_task || '');
     html += `<tr>
       <td title="${s.session_id}">${short}…</td>
       <td class="provider-${s.provider}">${s.provider}</td>
@@ -265,9 +276,10 @@ async function refresh() {
       <td>${elapsed(s.created_at)}</td>
       <td class="task-cell" title="${esc(s.initial_task)}">${esc(s.initial_task.slice(0,80))}${s.initial_task.length>80?'…':''}</td>
       <td style="white-space:nowrap">
-        <button class="watch-btn${isActive?' active':''}" onclick="openTerminal('${s.session_id}','${s.provider}','${taskEsc}')">▶ watch</button>
+        <button class="watch-btn${isActive?' active':''}"
+          data-sid="${s.session_id}" data-provider="${s.provider}" data-task="${taskTitle}">▶ watch</button>
         &nbsp;
-        <button class="kill-btn" onclick="kill('${s.session_id}')">kill</button>
+        <button class="kill-btn" data-sid="${s.session_id}">kill</button>
       </td>
     </tr>`;
   }
