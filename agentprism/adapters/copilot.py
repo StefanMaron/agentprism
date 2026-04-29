@@ -144,6 +144,11 @@ class CopilotAdapter(AgentAdapter):
         sess.status = "done"
         sess.done_event.set()
 
+    @property
+    def _all_chunks(self) -> list[dict]:
+        """Expose session chunks under the name the dashboard expects."""
+        return self._session.all_chunks if self._session else []
+
     def activity_info(self) -> dict:
         sess = self._session
         if sess is None:
